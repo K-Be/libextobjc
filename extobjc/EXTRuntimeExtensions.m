@@ -483,7 +483,7 @@ ext_propertyAttributes *ext_copyPropertyAttributes (objc_property_t property) {
 
         if (!next) {
             fprintf(stderr, "ERROR: Could not read class name in attribute string \"%s\" for property %s\n", attrString, property_getName(property));
-            return NULL;
+            goto errorOut;
         }
 
         if (className != next) {
@@ -774,13 +774,13 @@ NSMethodSignature *ext_globalMethodSignatureForSelector (SEL aSelector) {
     static const uintptr_t selectorCacheMask = (selectorCacheLength - 1);
     static ext_methodDescription volatile methodDescriptionCache[selectorCacheLength];
 
-    // reads and writes need to be atomic, but will be ridiculously fast,
-    // so we can stay in userland for locks, and keep the speed.
-	
     uintptr_t hash = (uintptr_t)((void *)aSelector) & selectorCacheMask;
     ext_methodDescription methodDesc;
   
+    // reads and writes need to be atomic, but will be ridiculously fast,
+    // so we can stay in userland for locks, and keep the speed.
     static os_unfair_lock lock = OS_UNFAIR_LOCK_INIT;
+    
     os_unfair_lock_lock(&lock);
     methodDesc = methodDescriptionCache[hash];
     os_unfair_lock_unlock(&lock);
@@ -837,9 +837,9 @@ NSMethodSignature *ext_globalMethodSignatureForSelector (SEL aSelector) {
 
     if (methodDesc.name) {
         // if not locked, cache this value, but don't wait around
-        if (os_unfair_lock_trylock(&lock)){
-          methodDescriptionCache[hash] = methodDesc;
-          os_unfair_lock_unlock(&lock);
+        if (os_unfair_lock_trylock(&lock)) {
+            methodDescriptionCache[hash] = methodDesc;
+            os_unfair_lock_unlock(&lock);
         }
 
         // NB: there are some esoteric system type encodings that cause -signatureWithObjCTypes: to fail,
